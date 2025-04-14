@@ -1,34 +1,41 @@
-// create-pulse.js
+import express from 'express';
+import { FTPClient } from 'basic-ftp';
 import fs from 'fs';
 import path from 'path';
-import express from 'express';
 
 const router = express.Router();
 
-// 🔐 Adjust this to match your production directory:
-const PULSE_DIR = path.join('/var/www/myvoicemate.com/public_html/pulses');
-
-router.post('/api/create-pulse', express.json({ limit: '1mb' }), async (req, res) => {
+router.post('/api/create-pulse', async (req, res) => {
   const { pulseName, htmlContent } = req.body;
 
-  // ✅ Basic validation
   if (!pulseName || !htmlContent) {
     return res.status(400).json({ error: 'Missing pulseName or htmlContent' });
   }
 
   try {
-    const filePath = path.join(PULSE_DIR, `${pulseName}.html`);
+    // Save locally to a temp file
+    const tempPath = path.join('/tmp', `${pulseName}.html`);
+    fs.writeFileSync(tempPath, htmlContent, 'utf8');
 
-    // ✍️ Write the HTML file
-    fs.writeFileSync(filePath, htmlContent, 'utf8');
+    // Connect to FTP and upload to Namecheap
+    const client = new FTPClient();
+    await client.access({
+      host: "ftp.YOURDOMAIN.com",  // <- replace this
+      user: "your_ftp_username",
+      password: "your_ftp_password",
+      secure: false
+    });
 
-    // 🔗 Build the public URL
+    await client.ensureDir('public_html/pulses');
+    await client.uploadFrom(tempPath, `public_html/pulses/${pulseName}.html`);
+    await client.close();
+
     const pulseUrl = `https://myvoicemate.com/pulses/${encodeURIComponent(pulseName)}.html`;
-
     res.json({ success: true, url: pulseUrl });
-  } catch (error) {
-    console.error('Failed to create pulse:', error);
-    res.status(500).json({ error: 'Server error creating Pulse' });
+
+  } catch (err) {
+    console.error('Pulse FTP upload error:', err);
+    res.status(500).json({ error: 'Failed to create and upload Pulse' });
   }
 });
 
