@@ -1,4 +1,3 @@
-// Puls.js
 import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
@@ -8,8 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
-
-import createPulseRouter from './api/create-pulse.js';
+import ffmpeg from 'fluent-ffmpeg';
 
 dotenv.config();
 
@@ -21,27 +19,52 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
-// TRANSCRIBE ENDPOINT
-// Expects audio as form-data under the field "audio"
+// Utility function: convert audio file from inputFile to outputFile (MP3)
+function convertAudio(inputFile, outputFile) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputFile)
+      .audioCodec('libmp3lame')
+      .audioBitrate(128)
+      .format('mp3')
+      .on('end', () => {
+        resolve(outputFile);
+      })
+      .on('error', (err) => {
+        console.error('FFmpeg conversion error:', err);
+        reject(err);
+      })
+      .save(outputFile);
+  });
+}
+
+// TRANSCRIBE ENDPOINT with server-side audio conversion
 app.post('/transcribe', upload.single('audio'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No audio file provided.' });
     }
-    const audioBuffer = req.file.buffer;
-    // Save the audio to a temporary file
-    const tempFilePath = path.join(tmpdir(), `${Date.now()}_audio.webm`);
-    fs.writeFileSync(tempFilePath, audioBuffer);
+    
+    // Write the original audio (e.g., WebM) to a temporary file.
+    const inputFilePath = path.join(tmpdir(), `${Date.now()}_audio.webm`);
+    fs.writeFileSync(inputFilePath, req.file.buffer);
+    
+    // Define the output file (convert to MP3)
+    const outputFilePath = path.join(tmpdir(), `${Date.now()}_audio.mp3`);
 
-    // Call OpenAI Whisper for transcription.
+    // Convert the file to MP3 (this adds extra latency — usually a few seconds)
+    await convertAudio(inputFilePath, outputFilePath);
+
+    // Transcribe using your transcription service (e.g., OpenAI Whisper)
     const transcriptionResponse = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(tempFilePath),
+      file: fs.createReadStream(outputFilePath),
       model: 'whisper-1',
       response_format: 'json'
     });
 
-    // Clean up temporary file.
-    fs.unlinkSync(tempFilePath);
+    // Clean up temporary files
+    fs.unlinkSync(inputFilePath);
+    fs.unlinkSync(outputFilePath);
+
     res.json({ transcript: transcriptionResponse.text });
   } catch (err) {
     console.error('Transcription error:', err);
@@ -49,10 +72,6 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
   }
 });
 
-// Mount the create-pulse router on the /api path.
-app.use('/api', createPulseRouter);
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`✅ VoiceMate transcription server running on port ${PORT}`);
+app.listen(3001, () => {
+  console.log('✅ VoiceMate transcription server running on port 3001');
 });
