@@ -1,6 +1,7 @@
 // api/create-pulse.js
 import express from 'express';
-import { FTPClient } from 'basic-ftp';
+import pkg from 'basic-ftp';
+const { FTPClient } = pkg;
 import fs from 'fs';
 import path from 'path';
 
@@ -14,11 +15,11 @@ router.post('/create-pulse', async (req, res) => {
   }
 
   try {
-    // Save locally to a temporary file if needed.
+    // Save locally to a temp file
     const tempPath = path.join('/tmp', `${pulseName}.html`);
     fs.writeFileSync(tempPath, htmlContent, 'utf8');
 
-    // Upload using FTP (update credentials as needed).
+    // Connect to FTP and upload to Namecheap
     const client = new FTPClient();
     await client.access({
       host: "ftp.YOURDOMAIN.com",  // Replace with your FTP host
@@ -33,7 +34,6 @@ router.post('/create-pulse', async (req, res) => {
 
     const pulseUrl = `https://myvoicemate.com/pulses/${encodeURIComponent(pulseName)}.html`;
     res.json({ success: true, url: pulseUrl });
-
   } catch (err) {
     console.error('Pulse FTP upload error:', err);
     res.status(500).json({ error: 'Failed to create and upload Pulse' });
