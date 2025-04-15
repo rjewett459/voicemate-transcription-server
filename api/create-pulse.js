@@ -1,3 +1,4 @@
+// api/create-pulse.js
 import express from 'express';
 import { FTPClient } from 'basic-ftp';
 import fs from 'fs';
@@ -5,7 +6,7 @@ import path from 'path';
 
 const router = express.Router();
 
-router.post('/api/create-pulse', async (req, res) => {
+router.post('/create-pulse', async (req, res) => {
   const { pulseName, htmlContent } = req.body;
 
   if (!pulseName || !htmlContent) {
@@ -13,14 +14,14 @@ router.post('/api/create-pulse', async (req, res) => {
   }
 
   try {
-    // Save locally to a temp file
+    // Save locally to a temporary file if needed.
     const tempPath = path.join('/tmp', `${pulseName}.html`);
     fs.writeFileSync(tempPath, htmlContent, 'utf8');
 
-    // Connect to FTP and upload to Namecheap
+    // Upload using FTP (update credentials as needed).
     const client = new FTPClient();
     await client.access({
-      host: "ftp.YOURDOMAIN.com",  // <- replace this
+      host: "ftp.YOURDOMAIN.com",  // Replace with your FTP host
       user: "your_ftp_username",
       password: "your_ftp_password",
       secure: false
